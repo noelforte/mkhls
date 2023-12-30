@@ -1,0 +1,41 @@
+{
+  "name": "mkhls",
+  "main": "mkhls.js",
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": {
+    "arg": "5.0.2",
+    "glob": "10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "20.10.5",
+    "eslint": "8.56.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-config-xo": "0.43.1"
+  },
+  "prettier": {
+    "bracketSpacing": true,
+    "arrowParens": "always",
+    "singleQuote": true,
+    "trailingComma": "es5"
+  },
+  "eslintConfig": {
+    "env": {
+      "es2021": true,
+      "node": true
+    },
+    "extends": [
+      "xo",
+      "prettier"
+    ],
+    "overrides": [],
+    "ignorePatterns": [
+      "**/node_modules/**"
+    ],
+    "parserOptions": {
+      "ecmaVersion": "latest",
+      "sourceType": "module"
+    },
+    "rules": {}
+  }
+}
