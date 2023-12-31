@@ -2,6 +2,7 @@
   "name": "mkhls",
   "main": "mkhls.js",
   "type": "module",
+  "packageManager": "pnpm@8.13.1+sha256.9e5f62ce5f2b7d4ceb3c2848f41cf0b33032c24d683c7088b53f62b1885fb246",
   "version": "1.0.0",
   "dependencies": {
     "arg": "5.0.2",
