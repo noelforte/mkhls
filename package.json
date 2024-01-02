@@ -5,8 +5,10 @@
   "packageManager": "pnpm@8.13.1+sha256.9e5f62ce5f2b7d4ceb3c2848f41cf0b33032c24d683c7088b53f62b1885fb246",
   "version": "1.0.0",
   "dependencies": {
-    "arg": "5.0.2",
-    "glob": "10.3.10"
+    "cli-progress": "^3.12.0",
+    "glob": "10.3.10",
+    "kleur": "4.1.5",
+    "execa": "8.0.1"
   },
   "devDependencies": {
     "@types/node": "20.10.5",
