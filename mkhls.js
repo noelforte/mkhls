@@ -48,7 +48,7 @@ const argv = parseArgs({
 const { silent, debug } = argv.values;
 
 // Define logging functions
-function log(level, message) {
+function logger(level, message) {
   const levelMap = {
     info: 'blue',
     warn: 'yellow',
@@ -67,11 +67,11 @@ function showMediaFacts({ video, audio }) {
   const fpsParams = video.r_frame_rate.split('/');
   const fps = (fpsParams[0] / fpsParams[1]).toFixed(2);
 
-  log(
+  logger(
     'info',
     `Selected video stream at index ${video.index}: ${video.width}x${video.height} @ ${fps}fps`
   );
-  log(
+  logger(
     'info',
     `Selected audio stream at index ${audio.index}: ${audio.channels}ch @ ${audio.sample_rate}Hz`
   );
@@ -112,11 +112,11 @@ try {
   };
 
   // Extract path to process
-  log('info', 'Resolving paths...');
+  logger('info', 'Resolving paths...');
   const sourcePath = path.resolve(argv.positionals[0]);
   const parsedPath = path.parse(sourcePath);
 
-  log('info', 'Getting file data...');
+  logger('info', 'Getting file data...');
   // Define args for ffprobe
   const fileData = JSON.parse(
     (
@@ -148,7 +148,7 @@ try {
   const filteredResolutions = encodeOptions.video.resolutions.filter(
     (resolution) => {
       if (resolution.height > streams.video.height) {
-        log('info', `skipping ${resolution.height}p resolution`);
+        logger('info', `skipping ${resolution.height}p resolution`);
       }
 
       return resolution.height <= streams.video.height;
@@ -197,5 +197,5 @@ try {
 
   console.log(transcodeArgs.join(' '));
 } catch (error) {
-  log('error', error.message);
+  logger('error', error.message);
 }
