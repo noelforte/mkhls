@@ -7,9 +7,11 @@
 // Import modules
 import process from 'node:process';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import kleur from 'kleur';
 
+// External modules
+import kleur from 'kleur';
 import { $ } from 'execa';
 
 // Parse command-line arguments
