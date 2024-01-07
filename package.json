@@ -1,45 +1,50 @@
 {
-  "name": "mkhls",
-  "main": "mkhls.js",
-  "type": "module",
-  "packageManager": "pnpm@8.13.1+sha256.9e5f62ce5f2b7d4ceb3c2848f41cf0b33032c24d683c7088b53f62b1885fb246",
-  "version": "1.0.0",
-  "dependencies": {
-    "cli-progress": "3.12.0",
-    "execa": "8.0.1",
-    "glob": "10.3.10",
-    "kleur": "4.1.5"
-  },
-  "devDependencies": {
-    "@types/cli-progress": "3.11.5",
-    "@types/node": "20.10.5",
-    "eslint": "8.56.0",
-    "eslint-config-prettier": "9.1.0",
-    "eslint-config-xo": "0.43.1"
-  },
-  "prettier": {
-    "bracketSpacing": true,
-    "arrowParens": "always",
-    "singleQuote": true,
-    "trailingComma": "es5"
-  },
-  "eslintConfig": {
-    "env": {
-      "es2021": true,
-      "node": true
-    },
-    "extends": [
-      "xo",
-      "prettier"
-    ],
-    "overrides": [],
-    "ignorePatterns": [
-      "**/node_modules/**"
-    ],
-    "parserOptions": {
-      "ecmaVersion": "latest",
-      "sourceType": "module"
-    },
-    "rules": {}
-  }
+	"name": "mkhls",
+	"main": "mkhls.js",
+	"type": "module",
+	"packageManager": "pnpm@8.14.0+sha256.9cebf61abd83f68177b29484da72da9751390eaad46dfc3072d266bfbb1ba7bf",
+	"version": "1.0.0",
+	"dependencies": {
+		"execa": "8.0.1",
+		"glob": "10.3.10",
+		"kleur": "4.1.5",
+		"sharp": "0.33.1"
+	},
+	"devDependencies": {
+		"@types/node": "20.10.5",
+		"eslint": "8.56.0",
+		"eslint-config-prettier": "9.1.0",
+		"eslint-config-xo": "0.43.1"
+	},
+	"prettier": {
+		"bracketSpacing": true,
+		"arrowParens": "always",
+		"singleQuote": true,
+		"trailingComma": "es5",
+		"useTabs": true
+	},
+	"eslintConfig": {
+		"env": {
+			"es2021": true,
+			"node": true
+		},
+		"extends": [
+			"xo",
+			"prettier"
+		],
+		"overrides": [],
+		"ignorePatterns": [
+			"**/node_modules/**"
+		],
+		"parserOptions": {
+			"ecmaVersion": "latest",
+			"sourceType": "module"
+		},
+		"rules": {
+			"eqeqeq": [
+				"error",
+				"smart"
+			]
+		}
+	}
 }
