@@ -44,7 +44,8 @@
 			"eqeqeq": [
 				"error",
 				"smart"
-			]
+			],
+			"no-warning-comments": "off"
 		}
 	}
 }
