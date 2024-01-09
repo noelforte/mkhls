@@ -413,8 +413,8 @@ try {
 	process.exit(error.code || process.exitCode || 126);
 }
 
-// // Clean up tempdir
-// await fs.promises.rm(tmpPath, {
-// 	recursive: true,
-// 	force: true,
-// });
+// Clean up tempdir
+await fs.promises.rm(tmpPath, {
+	recursive: true,
+	force: true,
+});
