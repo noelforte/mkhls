@@ -5,9 +5,10 @@
  */
 
 // Import modules
-import path, { basename } from 'node:path';
+import path from 'node:path';
 import process from 'process';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 // Helper modules
 import { logger, cmd, convertSecondsToTimestamp } from './lib/helpers.js';
@@ -84,9 +85,12 @@ try {
 	logger('info', 'Resolving paths...');
 	const sourcePath = path.resolve(opts.args[0]);
 	const sourcePathData = path.parse(sourcePath);
-	const outputPath = path.resolve(
-		opts.output || (sourcePathData.dir, sourcePathData.name)
-	);
+	const hashedName = crypto
+		.createHash('shake256', { outputLength: 6 })
+		.update(sourcePathData.name)
+		.digest('hex');
+
+	const outputPath = path.resolve(opts.output || process.cwd(), hashedName);
 	tmpPath = path.join(outputPath, '_tmp');
 
 	// Create output directories
@@ -389,9 +393,9 @@ try {
 							currentTime
 						)} --> ${convertSecondsToTimestamp(
 							currentTime + opts.mosaic.interval
-						)}\nmosaic.jpg#xywh=${x},${y},${seekImageMeta.width},${
-							seekImageMeta.height
-						}`
+						)}\n/${hashedName}/seek/storyboard.jpg#xywh=${x},${y},${
+							seekImageMeta.width
+						},${seekImageMeta.height}`
 					);
 
 					return {
@@ -401,10 +405,10 @@ try {
 					};
 				})
 			)
-			.toFile(path.join(seekDir, 'mosaic.jpg'));
+			.toFile(path.join(seekDir, 'storyboard.jpg'));
 
 		await fs.promises.writeFile(
-			path.join(seekDir, 'previews.vtt'),
+			path.join(seekDir, 'thumbnails.vtt'),
 			vttEntries.join('\n\n')
 		);
 	}
