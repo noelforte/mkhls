@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Helper modules
-import { logger, convertTime } from './lib/utils.js';
+import logger from './utils/logger.js';
+import convertTime from './utils/convertTime.js';
 import getArgs from './lib/getArgs.js';
 import FFmpeg from './lib/ffmpeg.js';
 

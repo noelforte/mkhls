@@ -1,21 +1,8 @@
-import kleur from 'kleur';
-import getArgs from './getArgs.js';
-const { values: opts } = getArgs;
-
-const padField = (field, padding) => String(field).padStart(padding, '0');
-const getTimestamp = () => {
-	const date = new Date();
-	return `${padField(date.getHours(), 2)}:${padField(
-		date.getMinutes(),
-		2
-	)}:${padField(date.getSeconds(), 2)}.${padField(date.getMilliseconds(), 3)}`;
-};
-
 /**
  * @typedef {'<HH:MM:SS.sss>'} Timestamp A string containing a timestamp in the format of `<hours>:<minutes>:<seconds>.<milliseconds>`
  * @typedef {'<Number>'} NumberString A string that can be evaluated as coerced to a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_coercion Number}.
  */
-const convertTime = {
+export default {
 	/**
 	 * Converts a timestamp into seconds
 	 * @param {(Timestamp|NumberString|Number)} ts
@@ -54,32 +41,3 @@ const convertTime = {
 		return `<${h}:${m}:${s}.${ms}>`;
 	},
 };
-
-// Logging function
-const logger = (meta, ...messages) => {
-	// Set up timestamp object and level
-	const [level, cmd] = meta.split(',');
-
-	if (opts.silent || (level === 'info' && !opts.verbose)) return;
-
-	const levelMap = {
-		info: 'blue',
-		event: 'magenta',
-		warn: 'yellow',
-		error: 'red',
-	};
-
-	messages
-		.join(' ')
-		.split('\n')
-		.forEach((message) => {
-			console.log(
-				kleur[levelMap[level]](
-					`[${getTimestamp()}] ${cmd ? `${cmd}: ${message}` : message}`
-				)
-			);
-		});
-};
-
-// Export everything
-export { logger, convertTime };
