@@ -11,31 +11,17 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Helper modules
-import { logger, cmd, convertSecondsToTimestamp } from './lib/helpers.js';
+import { logger, convertTime } from './lib/utils.js';
 import getArgs from './lib/getArgs.js';
-import probeStats from './lib/probeStats.js';
+import FFmpeg from './lib/ffmpeg.js';
 
 // External modules
 import sharp from 'sharp';
 import { globSync } from 'glob';
 
 const opts = {
-	args: getArgs.positionals,
+	positionals: getArgs.positionals,
 	...getArgs.values,
-	ffmpeg: [
-		// Configure logging
-		'-loglevel',
-		'warning',
-		'-hide_banner',
-		// Ignore input chapters
-		'-ignore_chapters',
-		'1',
-		'-stats_period',
-		'0.25',
-		// Use progress
-		'-progress',
-		'-',
-	],
 	hls: {
 		type: 'mpegts',
 		interval: 6,
@@ -44,7 +30,7 @@ const opts = {
 		noCodecs: true,
 	},
 	video: {
-		codec: 'h264',
+		codec: 'libx264',
 		pixelFormat: 'yuv420p',
 		resolutions: [
 			{ height: 2160, bitrate: '18000k', profile: 'high@5.2' },
@@ -71,25 +57,40 @@ const opts = {
 	},
 };
 
+// Instance ffmpeg handler
+const transcode = new FFmpeg();
+
 // Set overwrite option
-opts.ffmpeg.push(opts.overwrite ? '-y' : '-n');
+transcode.addArguments(opts.overwrite ? '-y' : '-n');
 
 let tmpPath;
 
 try {
-	if (opts.args.length !== 1) {
-		throw new Error(`Need 1 non-option argument, recieved ${opts.args.length}`);
+	if (opts.positionals.length !== 1) {
+		throw new Error(
+			`Need 1 non-option argument, recieved ${opts.positionals.length}`
+		);
 	}
 
 	// Extract path to process
 	logger('info', 'Resolving paths...');
-	const sourcePath = path.resolve(opts.args[0]);
-	const sourcePathData = path.parse(sourcePath);
+	const sourcePath = path.resolve(opts.positionals[0]);
+
+	// Get stats
+	logger('info', 'Getting file data...');
+	await transcode.loadMeta(sourcePath);
+
+	// Destructure shorthand globals for specs
+	const {
+		fpsDecimal: $FPS,
+		format: $FORMAT,
+		streams: { video: $VIDEO, audio: $AUDIO },
+	} = transcode.specs;
+
 	const hashedName = crypto
 		.createHash('shake256', { outputLength: 6 })
-		.update(sourcePathData.name)
+		.update(transcode.meta.path.name)
 		.digest('hex');
-
 	const outputPath = path.resolve(opts.output || process.cwd(), hashedName);
 	tmpPath = path.join(outputPath, '_tmp');
 
@@ -97,253 +98,207 @@ try {
 	await fs.promises.mkdir(outputPath, { recursive: true });
 	await fs.promises.mkdir(tmpPath, { recursive: true });
 
-	// Pt. 1 - Handle Video Files ------------------------------
-
-	// Get stats
-	logger('info', 'Getting file data...');
-	const stats = await probeStats(sourcePath);
-
-	// Define globals
-	const [VIDEO, AUDIO] = [
-		Boolean(stats.streams.video),
-		Boolean(stats.streams.audio),
-	];
+	// ###################################################################### //
+	// Pt. 1 - Handle Video Files  																						//
+	// ###################################################################### //
 
 	// Add source path to args
-	opts.ffmpeg.push('-i', sourcePath);
+	transcode.addArguments('-i', sourcePath);
 
 	// Filter resolutions from options
-	opts.video.resolutions = opts.video.resolutions.filter((resolution) => {
-		const validResolution = resolution.height <= stats.streams.video.height;
+	if ($VIDEO) {
+		opts.video.resolutions = opts.video.resolutions.filter((resolution) => {
+			const validResolution = resolution.height <= $VIDEO.height;
 
-		if (!validResolution) {
-			logger(
-				'warn',
-				`Skipping ${resolution.height}p output, source is ${stats.streams.video.height}p`
-			);
-		}
+			if (!validResolution) {
+				logger(
+					'warn',
+					`Skipping ${resolution.height}p output, source is ${$VIDEO.height}p`
+				);
+			}
 
-		return validResolution;
-	});
+			return validResolution;
+		});
+	}
 
 	// Handle poster frame creation
 	const posterFramePath = path.join(outputPath, 'poster.jpg');
-	if (!opts.poster && (opts.overwrite || !fs.existsSync(posterFramePath))) {
+	if (
+		$VIDEO &&
+		!opts.poster &&
+		(opts.overwrite || !fs.existsSync(posterFramePath))
+	) {
 		logger('event', 'Poster frame requested');
-		const posterArgs = VIDEO && [
-			// Use image2 as muxer
-			'-f',
-			'image2',
-			// Select video stream
-			'-map',
-			`0:${stats.streams.video.index}`,
-			// Seek to 5s
-			'-ss',
-			stats.totalDuration * 0.05,
-			// Select 1 frame from video and force output to be filename
-			'-frames:v',
-			'1',
-			'-update',
-			'1',
-			// Output
-			path.join(tmpPath, 'poster.png'),
-		];
-		opts.ffmpeg.push(posterArgs);
+		transcode
+			.addArgumentSet({
+				f: 'image2',
+				map: `0:${$VIDEO.index}`,
+				ss: $FORMAT.duration * 0.05,
+				'frames:v': 1,
+				update: 1,
+			})
+			.addArguments(path.join(tmpPath, 'poster.png'));
 	} else if (!opts.poster) {
 		throw new Error(
 			`Poster \`${posterFramePath}\` already exists; use --overwrite to force recreation`
 		);
 	}
 
-	if (!opts['skip-mp4']) {
-		logger('event', 'Progressive MP4 was requested');
-		const mp4Args = [
-			// Use mp4 as the format
-			'-f',
-			'mp4',
-			VIDEO && [
-				// Select video track
-				'-map',
-				`0:${stats.streams.video.index}`,
-				// Scale down to 720p if larger to 720p
-				'-filter:v',
-				`scale=-2:'min(720,ih)',format=${opts.video.pixelFormat}`,
-				// Use h264 as video codec
-				'-c:v',
-				opts.video.codec,
-				// Set video profile
-				'-profile:v',
-				'main',
-				'-level:v',
-				'3.1',
-				// Set bitrate options
-				'-b:v',
-				'2000k',
-				'-maxrate:v',
-				'2000k',
-				'-bufsize:v',
-				'3000k',
-			],
-			AUDIO && [
-				// Select audio track
-				'-map',
-				`0:${stats.streams.audio.index}`,
-				// Select audio codec
-				'-c:a',
-				opts.audio.codec,
-				// Reuse same sample rate from input
-				'-ar',
-				stats.streams.audio.sample_rate,
-				// Set audio profile
-				'-profile:a',
-				opts.audio.profile,
-				// Set audio bitrate
-				'-b:a',
-				'128k',
-			],
-			// Move index to beginning
-			'-movflags',
-			'+faststart',
-			// Set output filename
-			`${outputPath}/progressive.mp4`,
-		];
-		opts.ffmpeg.push(mp4Args);
+	if (!opts['skip-fallback']) {
+		if ($VIDEO) {
+			logger('event', 'Progressive MP4 was requested');
+			transcode.addArgumentSet({
+				f: 'mp4',
+				map: `0:${$VIDEO.index}`,
+				vf: ["scale=-2:'min(720,ih)'", `format=${opts.video.pixelFormat}`],
+				'codec:v': 'libx264',
+				'profile:v': 'main',
+				'level:v': 3.1,
+				'b:v': '2000k',
+				'maxrate:v': '2000k',
+				'bufsize:v': '3000k',
+			});
+			if ($AUDIO) {
+				transcode.addArgumentSet({
+					map: `0:${$AUDIO.index}`,
+					'profile:a': opts.audio.profile,
+					'codec:a': opts.audio.codec,
+					ar: $AUDIO.sample_rate,
+					'b:a': '96k',
+				});
+			}
+
+			transcode.addArguments(
+				'-movflags',
+				'+faststart',
+				path.join(outputPath, 'progressive.mp4')
+			);
+		} else {
+			transcode.addArgumentSet(
+				{
+					f: 'mp3',
+					map: `0:${$AUDIO.index}`,
+					'codec:a': 'libmp3lame',
+					'b:a': opts.audio.bitrate,
+				},
+				path.join(outputPath, 'progressive.mp3')
+			);
+		}
 	}
 
 	if (!opts['skip-hls']) {
 		logger('event', 'HLS package was requested');
-		const hlsKeyDistance = (stats.videoFPSNumber * opts.hls.interval).toFixed();
+		const hlsKeyDistance = ($FPS * opts.hls.interval).toFixed();
 		const hlsSegmentExtension = { mpegts: 'ts', fmp4: 'm4s' }[opts.hls.type];
 		const hlsSegmentName = opts.hls.segmentName
 			.replace('{stream}', '%v')
 			.replace('{index}', '%04d');
 		const hlsSegmentPath = path.join(outputPath, hlsSegmentName);
-		const hlsArgs = [
-			// Use HLS as format
-			'-f',
-			'hls',
-			VIDEO && [
-				// Set video codec and keyframes
-				'-c:v',
-				opts.video.codec,
-				'-g',
-				hlsKeyDistance,
-				'-keyint_min',
-				hlsKeyDistance,
-				// Set audio codec and sample rate
-				'-c:a',
-			],
-			AUDIO && [
-				opts.audio.codec,
-				'-ar',
-				stats.streams.audio.sample_rate,
-				// Set additional HLS options
-				'-hls_playlist_type',
-				'vod',
-				'-hls_segment_type',
-			],
-			opts.hls.type,
-			'-hls_time',
-			opts.hls.interval,
-			'-hls_list_size',
-			'0',
-			'-master_pl_name',
-			opts.hls.mainPlaylist,
-			'-hls_segment_filename',
-			`${hlsSegmentPath}.${hlsSegmentExtension}`,
 
-			// Iterate through resolutions
-			opts.video.resolutions.map((resolution, index) => {
+		// Use HLS as format
+		transcode.addArguments('-f', 'hls');
+
+		if ($VIDEO) {
+			transcode.addArgumentSet({
+				'c:v': opts.video.codec,
+				g: hlsKeyDistance,
+				keyint_min: hlsKeyDistance,
+			});
+		}
+
+		if ($AUDIO) {
+			transcode.addArgumentSet({
+				'c:a': opts.audio.codec,
+				ar: $AUDIO.sample_rate,
+			});
+		}
+
+		transcode.addArgumentSet({
+			hls_playlist_type: 'vod',
+			hls_segment_type: opts.hls.type,
+			hls_time: opts.hls.interval,
+			hls_list_size: 0,
+			master_pl_name: opts.hls.mainPlaylist,
+			hls_segment_filename: `${hlsSegmentPath}.${hlsSegmentExtension}`,
+		});
+
+		if ($VIDEO) {
+			opts.video.resolutions.forEach((resolution, index) => {
 				const resolutionProfile = resolution.profile.split('@');
 				const numericRate = Number(resolution.bitrate.replace(/[A-z]/, ''));
-				return [
-					// Video Options
-					VIDEO && [
-						'-map',
-						`0:${stats.streams.video.index}`,
-						`-filter:v:${index}`,
-						`scale=-2:${resolution.height},format=${opts.video.pixelFormat}`,
-						`-profile:v:${index}`,
-						resolutionProfile[0],
-						`-level:v:${index}`,
-						resolutionProfile[1],
-						`-b:v:${index}`,
-						resolution.bitrate,
-						`-maxrate:v:${index}`,
-						resolution.bitrate,
-						`-bufsize:v:${index}`,
-						`${numericRate * 1.5}k`,
-					],
 
-					// Audio options
-					AUDIO && [
-						'-map',
-						`0:${stats.streams.audio.index}`,
-						`-profile:a:${index}`,
-						opts.audio.profile,
-						`-b:a:${index}`,
-						opts.audio.bitrate,
-					],
-				];
-			}),
+				transcode.addArgumentSet({
+					map: `0:${$VIDEO.index}`,
+					[`filter:v:${index}`]: `scale=-2:${resolution.height},format=${opts.video.pixelFormat}`,
+					[`profile:v:${index}`]: resolutionProfile[0],
+					[`level:v:${index}`]: resolutionProfile[1],
+					[`b:v:${index}`]: resolution.bitrate,
+					[`maxrate:v:${index}`]: resolution.bitrate,
+					[`bufsize:v:${index}`]: `${numericRate * 1.5}k`,
+				});
 
-			// Build var_stream_map
-			'-var_stream_map',
-			opts.video.resolutions
+				if ($AUDIO) {
+					transcode.addArgumentSet({
+						map: `0:${$AUDIO.index}`,
+						[`profile:a:${index}`]: opts.audio.profile,
+						[`b:a:${index}`]: opts.audio.bitrate,
+					});
+				}
+			});
+		}
+
+		transcode.addArgumentSet({
+			var_stream_map: opts.video.resolutions
 				.map((resolution, index) =>
 					[
-						VIDEO && `v:${index}`,
-						AUDIO && `a:${index}`,
+						$VIDEO && `v:${index}`,
+						$AUDIO && `a:${index}`,
 						`name:${resolution.height}p`,
 					]
 						.filter(Boolean)
-						.join(',')
+						.join()
 				)
 				.join(' '),
+		});
 
-			// Set output
-			path.join(path.dirname(hlsSegmentPath), 'index.m3u8'),
-		];
-		opts.ffmpeg.push(hlsArgs);
+		// Set output
+		transcode.addArguments(
+			path.join(path.dirname(hlsSegmentPath), 'index.m3u8')
+		);
 	}
 
 	if (!opts['skip-seek-previews']) {
 		logger('event', 'Seek preview sprite requested');
 		opts.mosaic.interval = Math.min(
 			opts.mosaic.maxInterval,
-			Math.max(opts.mosaic.minInterval, stats.totalDuration / 60)
+			Math.max(opts.mosaic.minInterval, $FORMAT.duration / 60)
 		);
 		opts.mosaic.frames = Math.min(
 			180,
-			stats.totalDuration / opts.mosaic.minInterval
+			$FORMAT.duration / opts.mosaic.minInterval
 		).toFixed();
-		const seekArgs = VIDEO && [
-			// Use image2 as format
-			'-f',
-			'image2',
-			// Select video stream
-			'-map',
-			`0:${stats.streams.video.index}`,
-			// Create losless pngs to start
-			'-c:v',
-			'png',
-			// Scale to specified size and set framerate
-			'-filter:v',
-			`scale=-2:${opts.mosaic.tileheight},select='not(mod(\\n,${Math.ceil(
-				stats.streams.video.nb_frames / opts.mosaic.frames
-			)}))`,
-			'-fps_mode',
-			'passthrough',
-			// Set output
-			path.join(tmpPath, 'seek_%04d.png'),
-		];
-		opts.ffmpeg.push(seekArgs);
+
+		transcode.addArgumentSet({
+			f: 'image2',
+			map: `0:${$VIDEO.index}`,
+			'c:v': 'png',
+			'filter:v': `scale=-2:${
+				opts.mosaic.tileheight
+			},select='not(mod(\\n,${Math.ceil(
+				$VIDEO.nb_frames / opts.mosaic.frames
+			)}))'`,
+			fps_mode: 'passthrough',
+		});
+
+		transcode.addArguments(path.join(tmpPath, 'seek_%04d.png'));
 	}
 
 	// Encode everything
-	await cmd('ffmpeg', opts.ffmpeg, stats.totalDuration);
+	await transcode.start();
 
-	// Pt. 2 - Handle Image Files ------------------------------
+	// ###################################################################### //
+	// Pt. 2 - Handle Image Files  																						//
+	// ###################################################################### //
 
 	// If a poster wasn't provided, time to set that
 	if (!opts.poster) opts.poster = path.join(tmpPath, 'poster.png');
@@ -389,9 +344,9 @@ try {
 					const y =
 						Math.floor(index / opts.mosaic.imagesPerRow) * seekImageMeta.height;
 					vttEntries.push(
-						`${convertSecondsToTimestamp(
+						`${convertTime.toTimestamp(
 							currentTime
-						)} --> ${convertSecondsToTimestamp(
+						)} --> ${convertTime.toTimestamp(
 							currentTime + opts.mosaic.interval
 						)}\n/${hashedName}/seek/storyboard.jpg#xywh=${x},${y},${
 							seekImageMeta.width
