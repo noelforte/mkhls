@@ -13,14 +13,14 @@ import crypto from 'node:crypto';
 // Helper modules
 import { logger, convertTime } from './lib/utils.js';
 import getArgs from './lib/getArgs.js';
-import Transcoder from './lib/transcoder.js';
+import FFmpeg from './lib/ffmpeg.js';
 
 // External modules
 import sharp from 'sharp';
 import { globSync } from 'glob';
 
 const opts = {
-	args: getArgs.positionals,
+	positionals: getArgs.positionals,
 	...getArgs.values,
 	hls: {
 		type: 'mpegts',
@@ -57,8 +57,8 @@ const opts = {
 	},
 };
 
-// Instance the transcoder
-const transcode = new Transcoder();
+// Instance ffmpeg handler
+const transcode = new FFmpeg();
 
 // Set overwrite option
 transcode.addArguments(opts.overwrite ? '-y' : '-n');
@@ -66,13 +66,15 @@ transcode.addArguments(opts.overwrite ? '-y' : '-n');
 let tmpPath;
 
 try {
-	if (opts.args.length !== 1) {
-		throw new Error(`Need 1 non-option argument, recieved ${opts.args.length}`);
+	if (opts.positionals.length !== 1) {
+		throw new Error(
+			`Need 1 non-option argument, recieved ${opts.positionals.length}`
+		);
 	}
 
 	// Extract path to process
 	logger('info', 'Resolving paths...');
-	const sourcePath = path.resolve(opts.args[0]);
+	const sourcePath = path.resolve(opts.positionals[0]);
 
 	// Get stats
 	logger('info', 'Getting file data...');
