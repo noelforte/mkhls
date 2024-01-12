@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Helper modules
-import { logger, convertSecondsToTimestamp } from './lib/utils.js';
+import { logger, convertTime } from './lib/utils.js';
 import getArgs from './lib/getArgs.js';
 import Transcoder from './lib/transcoder.js';
 
@@ -342,9 +342,9 @@ try {
 					const y =
 						Math.floor(index / opts.mosaic.imagesPerRow) * seekImageMeta.height;
 					vttEntries.push(
-						`${convertSecondsToTimestamp(
+						`${convertTime.toTimestamp(
 							currentTime
-						)} --> ${convertSecondsToTimestamp(
+						)} --> ${convertTime.toTimestamp(
 							currentTime + opts.mosaic.interval
 						)}\n/${hashedName}/seek/storyboard.jpg#xywh=${x},${y},${
 							seekImageMeta.width
