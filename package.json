@@ -45,7 +45,13 @@
 				"error",
 				"smart"
 			],
-			"no-warning-comments": "off"
+			"no-warning-comments": "off",
+			"camelcase": [
+				"error",
+				{
+					"properties": "never"
+				}
+			]
 		}
 	}
 }
