@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Helper modules
-import { logger, convertSecondsToTimestamp } from './lib/helpers.js';
+import { logger, convertSecondsToTimestamp } from './lib/utils.js';
 import getArgs from './lib/getArgs.js';
 import Transcoder from './lib/transcoder.js';
 
