@@ -1,6 +1,6 @@
 import kleur from 'kleur';
 import getArgs from '../lib/getArgs.js';
-import { getTimestamp } from './getTimestamp.js';
+import getTimestamp from './getTimestamp.js';
 const { values: opts } = getArgs;
 
 // Logging function
