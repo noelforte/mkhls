@@ -12,7 +12,7 @@ export default (meta, ...messages) => {
 
 	const levelMap = {
 		info: 'blue',
-		event: 'magenta',
+		event: 'dim',
 		warn: 'yellow',
 		error: 'red',
 	};

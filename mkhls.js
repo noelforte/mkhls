@@ -20,43 +20,116 @@ import opts from './lib/getOpts.js';
 import sharp from 'sharp';
 import { globSync } from 'glob';
 import kleur from 'kleur';
+
+try {
+	const totalFilesToProcess = opts.positionals.length;
+
+	if (totalFilesToProcess === 0) {
 		throw new Error(
-			`Need 1 non-option argument, recieved ${opts.positionals.length}`
+			`Need at least 1 non-option argument, recieved ${opts.positionals.length}`
 		);
 	}
 
+	for await (const [step, item] of opts.positionals.entries()) {
+		if (item)
+			console.log(
+				kleur.bold(`Encoding ${item} (${step + 1} of ${totalFilesToProcess})`)
+			);
+
+		const { transcoder, globals, paths } = await setup(item);
+		await processVideo(transcoder, globals, paths);
+		await processImages(transcoder, paths);
+
+		// Clean up tempdir
+		await fs.promises.rm(paths.tmp, {
+			recursive: true,
+			force: true,
+		});
+	}
+} catch (error) {
+	logger('error', error.stack);
+	if (typeof error.code === 'number')
+		process.exit(error.code || process.exitCode);
+	process.exit(126);
+}
+
+async function setup(source) {
+	// Instance ffmpeg handler
+	const transcoder = new FFmpeg();
+
+	// Set overwrite option
+	transcoder.addArguments(opts.overwrite ? '-y' : '-n');
+
 	// Extract path to process
 	logger('info', 'Resolving paths...');
-	const sourcePath = path.resolve(opts.positionals[0]);
+	const sourcePath = path.resolve(source);
 
 	// Get stats
 	logger('info', 'Getting file data...');
-	await transcode.loadMeta(sourcePath);
+	await transcoder.loadMeta(sourcePath);
 
 	// Destructure shorthand globals for specs
 	const {
 		fpsDecimal: $FPS,
 		format: $FORMAT,
 		streams: { video: $VIDEO, audio: $AUDIO },
-	} = transcode.specs;
+	} = transcoder.specs;
 
 	const hashedName = crypto
 		.createHash('shake256', { outputLength: 6 })
-		.update(transcode.meta.path.name)
+		.update(transcoder.meta.path.name)
 		.digest('hex');
 	const outputPath = path.resolve(opts.output || process.cwd(), hashedName);
-	tmpPath = path.join(outputPath, '_tmp');
+	const tmpPath = path.join(outputPath, '_tmp');
+
+	// Find poster frames
+	if (
+		$VIDEO &&
+		(opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
+	) {
+		const extPattern = '{jp?(e)g,tif?(f),png,webp}';
+		const posterFrameMatches = [
+			globSync(
+				`${transcoder.meta.path.dir}/${transcoder.meta.path.name}.${extPattern}`
+			),
+			globSync(`${transcoder.meta.path.dir}/*.${extPattern}`).sort(),
+		];
+
+		transcoder.meta.poster =
+			posterFrameMatches[0][0] || posterFrameMatches[1][0];
+	} else {
+		throw new Error(
+			`Error: Poster ${path.join(outputPath, 'poster.jpg')} already exists!`
+		);
+	}
 
 	// Create output directories
 	await fs.promises.mkdir(outputPath, { recursive: true });
 	await fs.promises.mkdir(tmpPath, { recursive: true });
 
-	// ###################################################################### //
-	// Pt. 1 - Handle Video Files  																						//
-	// ###################################################################### //
+	return {
+		transcoder,
+		globals: {
+			$FORMAT,
+			$FPS,
+			$VIDEO,
+			$AUDIO,
+			$HASHEDNAME: hashedName,
+		},
+		paths: {
+			source: sourcePath,
+			tmp: tmpPath,
+			output: outputPath,
+		},
+	};
+}
+
+async function processVideo(transcoder, globals, paths) {
+	// Destructure globals
+	const { $VIDEO, $AUDIO, $FORMAT, $FPS } = globals;
 
 	// Add source path to args
-	transcode.addArguments('-i', sourcePath);
+	transcoder.addArguments('-i', paths.source);
 
 	// Filter resolutions from options
 	if ($VIDEO) {
@@ -65,7 +138,7 @@ import kleur from 'kleur';
 
 			if (!validResolution) {
 				logger(
-					'warn',
+					'event',
 					`Skipping ${resolution.height}p output, source is ${$VIDEO.height}p`
 				);
 			}
@@ -75,14 +148,10 @@ import kleur from 'kleur';
 	}
 
 	// Handle poster frame creation
-	const posterFramePath = path.join(outputPath, 'poster.jpg');
-	if (
-		$VIDEO &&
-		!opts.poster &&
-		(opts.overwrite || !fs.existsSync(posterFramePath))
-	) {
-		logger('event', 'Poster frame requested');
-		transcode
+
+	if (!transcoder.meta.poster) {
+		logger('info', 'Poster frame requested');
+		transcoder
 			.addArgumentSet({
 				f: 'image2',
 				map: `0:${$VIDEO.index}`,
@@ -90,17 +159,13 @@ import kleur from 'kleur';
 				'frames:v': 1,
 				update: 1,
 			})
-			.addArguments(path.join(tmpPath, 'poster.png'));
-	} else if (!opts.poster) {
-		throw new Error(
-			`Poster \`${posterFramePath}\` already exists; use --overwrite to force recreation`
-		);
+			.addArguments(path.join(paths.tmp, 'poster.png'));
 	}
 
 	if (!opts['skip-fallback']) {
 		if ($VIDEO) {
-			logger('event', 'Progressive MP4 was requested');
-			transcode.addArgumentSet({
+			logger('info', 'Progressive MP4 was requested');
+			transcoder.addArgumentSet({
 				f: 'mp4',
 				map: `0:${$VIDEO.index}`,
 				vf: ["scale=-2:'min(720,ih)'", `format=${opts.video.pixelFormat}`],
@@ -112,7 +177,7 @@ import kleur from 'kleur';
 				'bufsize:v': '3000k',
 			});
 			if ($AUDIO) {
-				transcode.addArgumentSet({
+				transcoder.addArgumentSet({
 					map: `0:${$AUDIO.index}`,
 					'profile:a': opts.audio.profile,
 					'codec:a': opts.audio.codec,
@@ -121,38 +186,38 @@ import kleur from 'kleur';
 				});
 			}
 
-			transcode.addArguments(
+			transcoder.addArguments(
 				'-movflags',
 				'+faststart',
-				path.join(outputPath, 'progressive.mp4')
+				path.join(paths.output, 'progressive.mp4')
 			);
 		} else {
-			transcode.addArgumentSet(
+			transcoder.addArgumentSet(
 				{
 					f: 'mp3',
 					map: `0:${$AUDIO.index}`,
 					'codec:a': 'libmp3lame',
 					'b:a': opts.audio.bitrate,
 				},
-				path.join(outputPath, 'progressive.mp3')
+				path.join(paths.output, 'progressive.mp3')
 			);
 		}
 	}
 
 	if (!opts['skip-hls']) {
-		logger('event', 'HLS package was requested');
+		logger('info', 'HLS package was requested');
 		const hlsKeyDistance = ($FPS * opts.hls.interval).toFixed();
 		const hlsSegmentExtension = { mpegts: 'ts', fmp4: 'm4s' }[opts.hls.type];
 		const hlsSegmentName = opts.hls.segmentName
 			.replace('{stream}', '%v')
 			.replace('{index}', '%04d');
-		const hlsSegmentPath = path.join(outputPath, hlsSegmentName);
+		const hlsSegmentPath = path.join(paths.output, hlsSegmentName);
 
 		// Use HLS as format
-		transcode.addArguments('-f', 'hls');
+		transcoder.addArguments('-f', 'hls');
 
 		if ($VIDEO) {
-			transcode.addArgumentSet({
+			transcoder.addArgumentSet({
 				'c:v': opts.video.codec,
 				g: hlsKeyDistance,
 				keyint_min: hlsKeyDistance,
@@ -160,13 +225,13 @@ import kleur from 'kleur';
 		}
 
 		if ($AUDIO) {
-			transcode.addArgumentSet({
+			transcoder.addArgumentSet({
 				'c:a': opts.audio.codec,
 				ar: $AUDIO.sample_rate,
 			});
 		}
 
-		transcode.addArgumentSet({
+		transcoder.addArgumentSet({
 			hls_playlist_type: 'vod',
 			hls_segment_type: opts.hls.type,
 			hls_time: opts.hls.interval,
@@ -180,7 +245,7 @@ import kleur from 'kleur';
 				const resolutionProfile = resolution.profile.split('@');
 				const numericRate = Number(resolution.bitrate.replace(/[A-z]/, ''));
 
-				transcode.addArgumentSet({
+				transcoder.addArgumentSet({
 					map: `0:${$VIDEO.index}`,
 					[`filter:v:${index}`]: `scale=-2:${resolution.height},format=${opts.video.pixelFormat}`,
 					[`profile:v:${index}`]: resolutionProfile[0],
@@ -191,7 +256,7 @@ import kleur from 'kleur';
 				});
 
 				if ($AUDIO) {
-					transcode.addArgumentSet({
+					transcoder.addArgumentSet({
 						map: `0:${$AUDIO.index}`,
 						[`profile:a:${index}`]: opts.audio.profile,
 						[`b:a:${index}`]: opts.audio.bitrate,
@@ -200,7 +265,7 @@ import kleur from 'kleur';
 			});
 		}
 
-		transcode.addArgumentSet({
+		transcoder.addArgumentSet({
 			var_stream_map: opts.video.resolutions
 				.map((resolution, index) =>
 					[
@@ -215,13 +280,13 @@ import kleur from 'kleur';
 		});
 
 		// Set output
-		transcode.addArguments(
+		transcoder.addArguments(
 			path.join(path.dirname(hlsSegmentPath), 'index.m3u8')
 		);
 	}
 
 	if (!opts['skip-seek-previews']) {
-		logger('event', 'Seek preview sprite requested');
+		logger('info', 'Seek preview sprite requested');
 		opts.mosaic.interval = Math.min(
 			opts.mosaic.maxInterval,
 			Math.max(opts.mosaic.minInterval, $FORMAT.duration / 60)
@@ -231,7 +296,7 @@ import kleur from 'kleur';
 			$FORMAT.duration / opts.mosaic.minInterval
 		).toFixed();
 
-		transcode.addArgumentSet({
+		transcoder.addArgumentSet({
 			f: 'image2',
 			map: `0:${$VIDEO.index}`,
 			'c:v': 'png',
@@ -243,31 +308,28 @@ import kleur from 'kleur';
 			fps_mode: 'passthrough',
 		});
 
-		transcode.addArguments(path.join(tmpPath, 'seek_%04d.png'));
+		transcoder.addArguments(path.join(paths.tmp, 'seek_%04d.png'));
 	}
 
 	// Encode everything
-	await transcode.start();
+	return transcoder.start();
+}
 
-	// ###################################################################### //
-	// Pt. 2 - Handle Image Files  																						//
-	// ###################################################################### //
-
+async function processImages(transcoder, paths) {
 	// If a poster wasn't provided, time to set that
-	if (!opts.poster) opts.poster = path.join(tmpPath, 'poster.png');
 	logger('event', 'Creating poster.jpg');
-	sharp(opts.poster)
+	sharp(transcoder.meta.poster || path.join(paths.tmp, 'poster.png'))
 		.resize(null, opts.video.resolutions[0].height)
 		.jpeg()
-		.toFile(path.join(posterFramePath));
+		.toFile(path.join(paths.output, 'poster.jpg'));
 
 	if (!opts['skip-seek-previews']) {
 		logger('event', 'Creating preview mosaic');
-		const seekDir = path.join(outputPath, 'seek');
+		const seekDir = path.join(paths.output, 'seek');
 		await fs.promises.mkdir(seekDir, { recursive: true });
 
 		// Collect list of files for mosaic
-		const seekImages = globSync(path.join(tmpPath, 'seek_*.png')).sort();
+		const seekImages = globSync(path.join(paths.tmp, 'seek_*.png')).sort();
 
 		// Use the first image to get some metadata
 		const seekImageMeta = await sharp(seekImages[0]).metadata();
@@ -301,7 +363,7 @@ import kleur from 'kleur';
 							currentTime
 						)} --> ${convertTime.toTimestamp(
 							currentTime + opts.mosaic.interval
-						)}\n/${hashedName}/seek/storyboard.jpg#xywh=${x},${y},${
+						)}\n/${paths.hashed}/seek/storyboard.jpg#xywh=${x},${y},${
 							seekImageMeta.width
 						},${seekImageMeta.height}`
 					);
@@ -320,13 +382,4 @@ import kleur from 'kleur';
 			vttEntries.join('\n\n')
 		);
 	}
-} catch (error) {
-	logger('error', error.stack);
-	process.exit(error.code || process.exitCode || 126);
 }
-
-// Clean up tempdir
-await fs.promises.rm(tmpPath, {
-	recursive: true,
-	force: true,
-});
