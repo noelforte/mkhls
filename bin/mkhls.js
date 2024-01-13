@@ -11,10 +11,10 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Helper modules
-import logger from './utils/logger.js';
-import convertTime from './utils/convertTime.js';
-import FFmpeg from './lib/ffmpeg.js';
-import opts from './lib/getOpts.js';
+import logger from '../utils/logger.js';
+import convertTime from '../utils/convertTime.js';
+import FFmpeg from '../lib/ffmpeg.js';
+import opts from '../lib/getOpts.js';
 
 // External modules
 import sharp from 'sharp';
