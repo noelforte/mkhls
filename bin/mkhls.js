@@ -8,7 +8,6 @@
 import path from 'node:path';
 import process from 'process';
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 
 // Helper modules
 import logger from '../utils/logger.js';
@@ -75,13 +74,9 @@ async function setup(source) {
 		streams: { video: $VIDEO, audio: $AUDIO },
 	} = transcoder.specs;
 
-	transcoder.uuid = crypto
-		.createHash('sha1')
-		.update(transcoder.meta.path.name)
-		.digest('base64url');
 	const outputPath = path.resolve(
 		opts.output || process.cwd(),
-		transcoder.uuid
+		transcoder.meta.slug
 	);
 	const tmpPath = path.join(outputPath, '_tmp');
 
@@ -370,7 +365,7 @@ async function processImages(transcoder, paths) {
 							currentTime + opts.mosaic.interval
 						)}\n${path.join(
 							'/',
-							transcoder.uuid,
+							transcoder.meta.slug,
 							'seek/storyboard.jpg'
 						)}#xywh=${x},${y},${seekImageMeta.width},${seekImageMeta.height}`
 					);
