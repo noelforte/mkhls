@@ -38,6 +38,6 @@ export default {
 			.padStart(2, '0');
 		const ms = (seconds % 1).toFixed(3).replace('0.', '');
 
-		return `<${h}:${m}:${s}.${ms}>`;
+		return `${h}:${m}:${s}.${ms}`;
 	},
 };

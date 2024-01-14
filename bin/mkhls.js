@@ -75,11 +75,14 @@ async function setup(source) {
 		streams: { video: $VIDEO, audio: $AUDIO },
 	} = transcoder.specs;
 
-	const hashedName = crypto
-		.createHash('shake256', { outputLength: 6 })
+	transcoder.uuid = crypto
+		.createHash('sha1')
 		.update(transcoder.meta.path.name)
-		.digest('hex');
-	const outputPath = path.resolve(opts.output || process.cwd(), hashedName);
+		.digest('base64url');
+	const outputPath = path.resolve(
+		opts.output || process.cwd(),
+		transcoder.uuid
+	);
 	const tmpPath = path.join(outputPath, '_tmp');
 
 	// Find poster frames
@@ -99,7 +102,10 @@ async function setup(source) {
 			posterFrameMatches[0][0] || posterFrameMatches[1][0];
 	} else {
 		throw new Error(
-			`Error: Poster ${path.join(outputPath, 'poster.jpg')} already exists!`
+			`Poster ${path.join(
+				outputPath,
+				'poster.jpg'
+			)} already exists, use --overwrite to force.`
 		);
 	}
 
@@ -114,7 +120,6 @@ async function setup(source) {
 			$FPS,
 			$VIDEO,
 			$AUDIO,
-			$HASHEDNAME: hashedName,
 		},
 		paths: {
 			source: sourcePath,
@@ -363,9 +368,11 @@ async function processImages(transcoder, paths) {
 							currentTime
 						)} --> ${convertTime.toTimestamp(
 							currentTime + opts.mosaic.interval
-						)}\n/${paths.hashed}/seek/storyboard.jpg#xywh=${x},${y},${
-							seekImageMeta.width
-						},${seekImageMeta.height}`
+						)}\n${path.join(
+							'/',
+							transcoder.uuid,
+							'seek/storyboard.jpg'
+						)}#xywh=${x},${y},${seekImageMeta.width},${seekImageMeta.height}`
 					);
 
 					return {
