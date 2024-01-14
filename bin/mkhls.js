@@ -76,6 +76,7 @@ async function setup(source) {
 
 	const outputPath = path.resolve(
 		opts.output || process.cwd(),
+		opts['output-prefix'],
 		transcoder.meta.slug
 	);
 	const tmpPath = path.join(outputPath, '_tmp');
@@ -117,6 +118,7 @@ async function setup(source) {
 			source: sourcePath,
 			tmp: tmpPath,
 			output: outputPath,
+			outputPrefix: opts['output-prefix'],
 		},
 	};
 }
@@ -362,6 +364,7 @@ async function processImages(transcoder, paths) {
 							currentTime + opts.mosaic.interval
 						)}\n${path.join(
 							'/',
+							paths.outputPrefix,
 							transcoder.meta.slug,
 							'seek/storyboard.jpg'
 						)}#xywh=${x},${y},${seekImageMeta.width},${seekImageMeta.height}`
