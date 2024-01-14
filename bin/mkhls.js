@@ -5,11 +5,12 @@
  */
 
 // Import modules
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'process';
 import fs from 'node:fs';
 
-// Helper modules
+// Local modules
 import logger from '../utils/logger.js';
 import convertTime from '../utils/convertTime.js';
 import FFmpeg from '../lib/ffmpeg.js';
@@ -19,6 +20,12 @@ import opts from '../lib/getOpts.js';
 import sharp from 'sharp';
 import { globSync } from 'glob';
 import kleur from 'kleur';
+
+// Load local JSON
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
+
+console.log(`\n${pkg.name} v${pkg.version}\n`);
 
 try {
 	const totalFilesToProcess = opts.positionals.length;
@@ -32,7 +39,9 @@ try {
 	for await (const [step, item] of opts.positionals.entries()) {
 		if (item)
 			console.log(
-				kleur.bold(`Encoding ${item} (${step + 1} of ${totalFilesToProcess})`)
+				kleur.bold(
+					`[${step + 1} of ${totalFilesToProcess}] Packaging ${item}...`
+				)
 			);
 
 		const { transcoder, globals, paths } = await setup(item);
@@ -44,6 +53,8 @@ try {
 			recursive: true,
 			force: true,
 		});
+
+		console.log('\n');
 	}
 } catch (error) {
 	logger('error', error.stack);
@@ -65,7 +76,7 @@ async function setup(source) {
 
 	// Get stats
 	logger('info', 'Getting file data...');
-	await transcoder.loadMeta(sourcePath);
+	transcoder.loadMeta(sourcePath);
 
 	// Destructure shorthand globals for specs
 	const {

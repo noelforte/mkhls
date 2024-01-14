@@ -6,9 +6,8 @@
 		"mkhls": "./bin/mkhls.js"
 	},
 	"packageManager": "pnpm@8.14.1+sha256.2df78e65d433d7693b9d3fbdaf431b2d96bb4f96a2ffecd51a50efe16e50a6a8",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"dependencies": {
-		"execa": "8.0.1",
 		"glob": "10.3.10",
 		"kleur": "4.1.5",
 		"sharp": "0.33.1"
