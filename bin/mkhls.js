@@ -85,16 +85,13 @@ async function setup(source) {
 		$VIDEO &&
 		(opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
 	) {
-		const extPattern = '{jp?(e)g,tif?(f),png,webp}';
-		const posterFrameMatches = [
-			globSync(
-				`${transcoder.meta.path.dir}/${transcoder.meta.path.name}.${extPattern}`
-			),
-			globSync(`${transcoder.meta.path.dir}/*.${extPattern}`).sort(),
-		];
-
-		transcoder.meta.poster =
-			posterFrameMatches[0][0] || posterFrameMatches[1][0];
+		transcoder.meta.poster = globSync(
+			`${transcoder.meta.path.dir}/${
+				fs.readdirSync(transcoder.meta.path.dir).length > 2
+					? transcoder.meta.path.name
+					: '*'
+			}.{jp?(e)g,tif?(f),png,webp}`
+		)[0];
 	} else {
 		throw new Error(
 			`Poster ${path.join(
