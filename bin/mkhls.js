@@ -98,7 +98,7 @@ async function setup(source) {
 		$VIDEO &&
 		(opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
 	) {
-		transcoder.meta.poster = findPoster(source);
+		transcoder.meta.poster = findPoster(sourcePath);
 	} else {
 		throw new Error(
 			`Poster ${path.join(
