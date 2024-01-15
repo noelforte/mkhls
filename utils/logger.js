@@ -15,7 +15,7 @@ const { values: opts } = getArgs;
  * A comma-seperated string specifying `<level>` and `<program>`, where
  * `<level>` is one of `info`, `event`, `warn`, or `error`.
  */
-export default (meta, ...messages) => {
+function logger(meta, ...messages) {
 	// Set up timestamp object and level
 	const [level, cmd] = meta.split(',');
 
@@ -38,4 +38,6 @@ export default (meta, ...messages) => {
 				)
 			);
 		});
-};
+}
+
+export default logger;

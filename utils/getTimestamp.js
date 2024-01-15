@@ -1,4 +1,4 @@
-export default () => {
+function getTimestamp() {
 	const date = new Date();
 	const padField = (field, padding) => String(field).padStart(padding, '0');
 
@@ -6,4 +6,6 @@ export default () => {
 		date.getMinutes(),
 		2
 	)}:${padField(date.getSeconds(), 2)}.${padField(date.getMilliseconds(), 3)}`;
-};
+}
+
+export default getTimestamp;

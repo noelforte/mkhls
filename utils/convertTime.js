@@ -2,7 +2,7 @@
  * @typedef {'<HH:MM:SS.sss>'} Timestamp A string containing a timestamp in the format of `<hours>:<minutes>:<seconds>.<milliseconds>`
  * @typedef {'<Number>'} NumberString A string that can be evaluated as coerced to a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_coercion Number}.
  */
-export default {
+const convertTime = {
 	/**
 	 * Converts a timestamp into seconds
 	 * @param {(Timestamp|NumberString|Number)} ts
@@ -41,3 +41,5 @@ export default {
 		return `${h}:${m}:${s}.${ms}`;
 	},
 };
+
+export default convertTime;

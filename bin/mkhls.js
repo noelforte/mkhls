@@ -11,14 +11,14 @@ import process from 'process';
 import fs from 'node:fs';
 
 // Local modules
-import logger from '../utils/logger.js';
-import convertTime from '../utils/convertTime.js';
 import FFmpeg from '../lib/ffmpeg.js';
 import opts from '../lib/getOpts.js';
+import findPoster from '../utils/findPoster.js';
+import logger from '../utils/logger.js';
+import convertTime from '../utils/convertTime.js';
 
 // External modules
 import sharp from 'sharp';
-import { globSync } from 'glob';
 import kleur from 'kleur';
 
 // Load local JSON
@@ -97,13 +97,7 @@ async function setup(source) {
 		$VIDEO &&
 		(opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
 	) {
-		transcoder.meta.poster = globSync(
-			`${transcoder.meta.path.dir}/${
-				fs.readdirSync(transcoder.meta.path.dir).length > 2
-					? transcoder.meta.path.name
-					: '*'
-			}.{jp?(e)g,tif?(f),png,webp}`
-		)[0];
+		transcoder.meta.poster = findPoster(source);
 	} else {
 		throw new Error(
 			`Poster ${path.join(
@@ -339,7 +333,10 @@ async function processImages(transcoder, paths) {
 		await fs.promises.mkdir(seekDir, { recursive: true });
 
 		// Collect list of files for mosaic
-		const seekImages = globSync(path.join(paths.tmp, 'seek_*.png')).sort();
+		const seekImages = fs
+			.readdirSync(paths.tmp)
+			.filter((item) => item.startsWith('seek_'))
+			.map((item) => path.resolve(paths.tmp, item));
 
 		// Use the first image to get some metadata
 		const seekImageMeta = await sharp(seekImages[0]).metadata();
