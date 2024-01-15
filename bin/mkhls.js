@@ -93,6 +93,22 @@ async function setup(source) {
 	);
 	const tmpPath = path.join(outputPath, '_tmp');
 
+	// Filter resolutions from options and assign to transcode instance
+	if ($VIDEO) {
+		transcoder.resolutions = opts.video.resolutions.filter((resolution) => {
+			const validResolution = resolution.height <= $VIDEO.height;
+
+			if (!validResolution) {
+				logger(
+					'event',
+					`Skipping ${resolution.height}p output, source is ${$VIDEO.height}p`
+				);
+			}
+
+			return validResolution;
+		});
+	}
+
 	// Find poster frames
 	if (
 		$VIDEO &&
@@ -136,22 +152,6 @@ async function processVideo(transcoder, globals, paths) {
 
 	// Add source path to args
 	transcoder.addArguments('-i', paths.source);
-
-	// Filter resolutions from options
-	if ($VIDEO) {
-		opts.video.resolutions = opts.video.resolutions.filter((resolution) => {
-			const validResolution = resolution.height <= $VIDEO.height;
-
-			if (!validResolution) {
-				logger(
-					'event',
-					`Skipping ${resolution.height}p output, source is ${$VIDEO.height}p`
-				);
-			}
-
-			return validResolution;
-		});
-	}
 
 	// Handle poster frame creation
 
@@ -247,7 +247,7 @@ async function processVideo(transcoder, globals, paths) {
 		});
 
 		if ($VIDEO) {
-			opts.video.resolutions.forEach((resolution, index) => {
+			transcoder.resolutions.forEach((resolution, index) => {
 				const resolutionProfile = resolution.profile.split('@');
 				const numericRate = Number(resolution.bitrate.replace(/[A-z]/, ''));
 
@@ -272,7 +272,7 @@ async function processVideo(transcoder, globals, paths) {
 		}
 
 		transcoder.addArgumentSet({
-			var_stream_map: opts.video.resolutions
+			var_stream_map: transcoder.resolutions
 				.map((resolution, index) =>
 					[
 						$VIDEO && `v:${index}`,
@@ -323,7 +323,7 @@ async function processImages(transcoder, paths) {
 	// If a poster wasn't provided, time to set that
 	logger('event', 'Creating poster.jpg');
 	sharp(transcoder.meta.poster || path.join(paths.tmp, 'poster.png'))
-		.resize(null, opts.video.resolutions[0].height)
+		.resize(null, transcoder.resolutions[0].height)
 		.jpeg()
 		.toFile(path.join(paths.output, 'poster.jpg'));
 
