@@ -80,6 +80,7 @@ async function setup(source) {
 
 	// Destructure shorthand globals for specs
 	const {
+		frameCount: $FRAME_COUNT,
 		fpsDecimal: $FPS,
 		format: $FORMAT,
 		streams: { video: $VIDEO, audio: $AUDIO },
@@ -115,6 +116,7 @@ async function setup(source) {
 		transcoder,
 		globals: {
 			$FORMAT,
+			$FRAME_COUNT,
 			$FPS,
 			$VIDEO,
 			$AUDIO,
@@ -130,7 +132,7 @@ async function setup(source) {
 
 async function processVideo(transcoder, globals, paths) {
 	// Destructure globals
-	const { $VIDEO, $AUDIO, $FORMAT, $FPS } = globals;
+	const { $VIDEO, $AUDIO, $FORMAT, $FPS, $FRAME_COUNT } = globals;
 
 	// Add source path to args
 	transcoder.addArguments('-i', paths.source);
@@ -306,9 +308,7 @@ async function processVideo(transcoder, globals, paths) {
 			'c:v': 'png',
 			'filter:v': `scale=-2:${
 				opts.mosaic.tileheight
-			},select='not(mod(\\n,${Math.ceil(
-				$VIDEO.nb_frames / opts.mosaic.frames
-			)}))'`,
+			},select='not(mod(\\n,${Math.ceil($FRAME_COUNT / opts.mosaic.frames)}))'`,
 			fps_mode: 'passthrough',
 		});
 
