@@ -23,6 +23,13 @@ import kleur from 'kleur';
 try {
 	const totalFilesToProcess = cli.args.length;
 
+	/*
+	Notable note:
+	We for await ... of here because each (really long) ffmpeg call parallel
+	processes all outputs of an input. This creats significant load on the 
+	system, so forcing parallel execution of parallel execution is
+	(probably) not a good idea 
+	*/
 	for await (const [step, item] of cli.args.entries()) {
 		if (item)
 			console.log(
@@ -32,6 +39,7 @@ try {
 			);
 
 		const { transcoder, globals, paths } = await setup(item);
+		logger('info', 'File data:', transcoder, globals, paths);
 		await processVideo(transcoder, globals, paths);
 		await processImages(transcoder, paths);
 
@@ -73,11 +81,24 @@ async function setup(source) {
 		streams: { video: $VIDEO, audio: $AUDIO },
 	} = transcoder.specs;
 
+	let { outputPrefix } = cli.opts;
+
+	// If preserve structure is true:
+	// 1. Remove current directory from source path
+	// 2. Resolve a new path, joining the output directory, prefix, resulting path, and slug
+	if (cli.opts.preserveDirStructure) {
+		outputPrefix = transcoder.meta.path.dir.replace(
+			path.join(process.cwd(), '/'),
+			''
+		);
+	}
+
 	const outputPath = path.resolve(
 		cli.opts.output,
-		cli.opts.outputPrefix,
+		outputPrefix,
 		transcoder.meta.slug
 	);
+
 	const tmpPath = path.join(outputPath, '_tmp');
 
 	// Build a resolution list and then filter that list down based on input file height
@@ -141,7 +162,7 @@ async function setup(source) {
 			source: sourcePath,
 			tmp: tmpPath,
 			output: outputPath,
-			outputPrefix: cli.opts.outputPrefix,
+			outputPrefix,
 		},
 	};
 }
