@@ -33,7 +33,8 @@ function logger(meta, ...messages) {
 		.forEach((message) => {
 			console.log(
 				kleur[levelMap[level]](
-					`[${getTimestamp()}] ${cmd ? `${cmd}: ${message}` : message}`
+					`[${getTimestamp()}] ` +
+						[cmd && `${cmd}:`, message].filter(Boolean).join(' ')
 				)
 			);
 		});
