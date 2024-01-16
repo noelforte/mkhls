@@ -1,7 +1,6 @@
 import kleur from 'kleur';
-import getArgs from '../lib/getArgs.js';
+import cli from '../lib/cli.js';
 import getTimestamp from './getTimestamp.js';
-const { values: opts } = getArgs;
 
 /**
  * Simple logging utility that wraps `console.log` calls with {@link https://www.npmjs.com/package/kleur kleur}
@@ -19,7 +18,7 @@ function logger(meta, ...messages) {
 	// Set up timestamp object and level
 	const [level, cmd] = meta.split(',');
 
-	if (opts.silent || (level === 'info' && !opts.verbose)) return;
+	if (cli.opts.silent || (level === 'info' && !cli.opts.verbose)) return;
 
 	const levelMap = {
 		info: 'blue',

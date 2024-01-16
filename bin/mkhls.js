@@ -5,14 +5,13 @@
  */
 
 // Import modules
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'process';
 import fs from 'node:fs';
 
 // Local modules
 import FFmpeg from '../lib/ffmpeg.js';
-import opts from '../lib/getOpts.js';
+import cli from '../lib/cli.js';
 import findPoster from '../utils/findPoster.js';
 import logger from '../utils/logger.js';
 import convertTime from '../utils/convertTime.js';
@@ -21,22 +20,10 @@ import convertTime from '../utils/convertTime.js';
 import sharp from 'sharp';
 import kleur from 'kleur';
 
-// Load local JSON
-const require = createRequire(import.meta.url);
-const pkg = require('../package.json');
-
-console.log(`\n${pkg.name} v${pkg.version}\n`);
-
 try {
-	const totalFilesToProcess = opts.positionals.length;
+	const totalFilesToProcess = cli.args.length;
 
-	if (totalFilesToProcess === 0) {
-		throw new Error(
-			`Need at least 1 non-option argument, recieved ${opts.positionals.length}`
-		);
-	}
-
-	for await (const [step, item] of opts.positionals.entries()) {
+	for await (const [step, item] of cli.args.entries()) {
 		if (item)
 			console.log(
 				kleur.bold(
@@ -68,7 +55,7 @@ async function setup(source) {
 	const transcoder = new FFmpeg();
 
 	// Set overwrite option
-	transcoder.addArguments(opts.overwrite ? '-y' : '-n');
+	transcoder.addArguments(cli.opts.overwrite ? '-y' : '-n');
 
 	// Extract path to process
 	logger('info', 'Resolving paths...');
@@ -87,32 +74,45 @@ async function setup(source) {
 	} = transcoder.specs;
 
 	const outputPath = path.resolve(
-		opts.output || process.cwd(),
-		opts['output-prefix'],
+		cli.opts.output,
+		cli.opts.outputPrefix,
 		transcoder.meta.slug
 	);
 	const tmpPath = path.join(outputPath, '_tmp');
 
-	// Filter resolutions from options and assign to transcode instance
+	// Build a resolution list and then filter that list down based on input file height
 	if ($VIDEO) {
-		transcoder.resolutions = opts.video.resolutions.filter((resolution) => {
-			const validResolution = resolution.height <= $VIDEO.height;
+		transcoder.resolutions = cli.opts.videoResolutions
+			.map((resolution, index) => {
+				if (resolution > $VIDEO.height) {
+					logger(
+						'event',
+						`Skipping ${resolution}p output, source is ${$VIDEO.height}p`
+					);
 
-			if (!validResolution) {
-				logger(
-					'event',
-					`Skipping ${resolution.height}p output, source is ${$VIDEO.height}p`
-				);
-			}
+					return;
+				}
 
-			return validResolution;
-		});
+				const {
+					videoBitrates: bitrates,
+					videoProfiles: profiles,
+					videoLevels: levels,
+				} = cli.opts;
+
+				return {
+					height: Number(resolution),
+					bitrate: Number(bitrates[index] || bitrates[bitrates.length - 1]),
+					profile: profiles[index] || profiles[profiles.length - 1],
+					level: levels[index] || levels[levels.length - 1],
+				};
+			})
+			.filter(Boolean);
 	}
 
 	// Find poster frames
 	if (
 		$VIDEO &&
-		(opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
+		(cli.opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
 	) {
 		transcoder.meta.poster = findPoster(sourcePath);
 	} else {
@@ -141,7 +141,7 @@ async function setup(source) {
 			source: sourcePath,
 			tmp: tmpPath,
 			output: outputPath,
-			outputPrefix: opts['output-prefix'],
+			outputPrefix: cli.opts.outputPrefix,
 		},
 	};
 }
@@ -168,13 +168,13 @@ async function processVideo(transcoder, globals, paths) {
 			.addArguments(path.join(paths.tmp, 'poster.png'));
 	}
 
-	if (!opts['skip-fallback']) {
+	if (cli.opts.fallback) {
 		if ($VIDEO) {
 			logger('info', 'Progressive MP4 was requested');
 			transcoder.addArgumentSet({
 				f: 'mp4',
 				map: `0:${$VIDEO.index}`,
-				vf: ["scale=-2:'min(720,ih)'", `format=${opts.video.pixelFormat}`],
+				vf: ["scale=-2:'min(720,ih)'", `format=${cli.opts.videoPixelFormat}`],
 				'codec:v': 'libx264',
 				'profile:v': 'main',
 				'level:v': 3.1,
@@ -185,8 +185,8 @@ async function processVideo(transcoder, globals, paths) {
 			if ($AUDIO) {
 				transcoder.addArgumentSet({
 					map: `0:${$AUDIO.index}`,
-					'profile:a': opts.audio.profile,
-					'codec:a': opts.audio.codec,
+					'profile:a': cli.opts.audioProfile,
+					'codec:a': cli.opts.audioCodec,
 					ar: $AUDIO.sample_rate,
 					'b:a': '96k',
 				});
@@ -203,18 +203,18 @@ async function processVideo(transcoder, globals, paths) {
 					f: 'mp3',
 					map: `0:${$AUDIO.index}`,
 					'codec:a': 'libmp3lame',
-					'b:a': opts.audio.bitrate,
+					'b:a': `${cli.opts.audioBitrate}k`,
 				},
 				path.join(paths.output, 'progressive.mp3')
 			);
 		}
 	}
 
-	if (!opts['skip-hls']) {
+	if (cli.opts.hls) {
 		logger('info', 'HLS package was requested');
-		const hlsKeyDistance = ($FPS * opts.hls.interval).toFixed();
-		const hlsSegmentExtension = { mpegts: 'ts', fmp4: 'm4s' }[opts.hls.type];
-		const hlsSegmentName = opts.hls.segmentName
+		const hlsKeyDistance = ($FPS * cli.opts.hlsInterval).toFixed();
+		const hlsSegmentExtension = { mpegts: 'ts', fmp4: 'm4s' }[cli.opts.hlsType];
+		const hlsSegmentName = cli.opts.hlsSegmentName
 			.replace('{stream}', '%v')
 			.replace('{index}', '%04d');
 		const hlsSegmentPath = path.join(paths.output, hlsSegmentName);
@@ -224,7 +224,7 @@ async function processVideo(transcoder, globals, paths) {
 
 		if ($VIDEO) {
 			transcoder.addArgumentSet({
-				'c:v': opts.video.codec,
+				'c:v': cli.opts.videoCodec,
 				g: hlsKeyDistance,
 				keyint_min: hlsKeyDistance,
 			});
@@ -232,40 +232,37 @@ async function processVideo(transcoder, globals, paths) {
 
 		if ($AUDIO) {
 			transcoder.addArgumentSet({
-				'c:a': opts.audio.codec,
+				'c:a': cli.opts.audioCodec,
 				ar: $AUDIO.sample_rate,
 			});
 		}
 
 		transcoder.addArgumentSet({
 			hls_playlist_type: 'vod',
-			hls_segment_type: opts.hls.type,
-			hls_time: opts.hls.interval,
+			hls_segment_type: cli.opts.hlsType,
+			hls_time: cli.opts.hlsInterval,
 			hls_list_size: 0,
-			master_pl_name: opts.hls.mainPlaylist,
+			master_pl_name: cli.opts.hlsRootPlaylistName,
 			hls_segment_filename: `${hlsSegmentPath}.${hlsSegmentExtension}`,
 		});
 
 		if ($VIDEO) {
 			transcoder.resolutions.forEach((resolution, index) => {
-				const resolutionProfile = resolution.profile.split('@');
-				const numericRate = Number(resolution.bitrate.replace(/[A-z]/, ''));
-
 				transcoder.addArgumentSet({
 					map: `0:${$VIDEO.index}`,
-					[`filter:v:${index}`]: `scale=-2:${resolution.height},format=${opts.video.pixelFormat}`,
-					[`profile:v:${index}`]: resolutionProfile[0],
-					[`level:v:${index}`]: resolutionProfile[1],
-					[`b:v:${index}`]: resolution.bitrate,
-					[`maxrate:v:${index}`]: resolution.bitrate,
-					[`bufsize:v:${index}`]: `${numericRate * 1.5}k`,
+					[`filter:v:${index}`]: `scale=-2:${resolution.height},format=${cli.opts.videoPixelFormat}`,
+					[`profile:v:${index}`]: resolution.profile,
+					[`level:v:${index}`]: resolution.level,
+					[`b:v:${index}`]: `${resolution.bitrate}k`,
+					[`maxrate:v:${index}`]: `${resolution.bitrate}k`,
+					[`bufsize:v:${index}`]: `${resolution.bitrate * 1.5}k`,
 				});
 
 				if ($AUDIO) {
 					transcoder.addArgumentSet({
 						map: `0:${$AUDIO.index}`,
-						[`profile:a:${index}`]: opts.audio.profile,
-						[`b:a:${index}`]: opts.audio.bitrate,
+						[`profile:a:${index}`]: cli.opts.audioProfile,
+						[`b:a:${index}`]: `${cli.opts.audioBitrate}k`,
 					});
 				}
 			});
@@ -291,15 +288,15 @@ async function processVideo(transcoder, globals, paths) {
 		);
 	}
 
-	if (!opts['skip-seek-previews']) {
+	if (cli.opts.timelinePreviews) {
 		logger('info', 'Seek preview sprite requested');
-		opts.mosaic.interval = Math.min(
-			opts.mosaic.maxInterval,
-			Math.max(opts.mosaic.minInterval, $FORMAT.duration / 60)
+		transcoder.meta.mosaicInterval = Math.min(
+			cli.opts.timelinePreviewIntervalMax,
+			Math.max(cli.opts.timelinePreviewIntervalMin, $FORMAT.duration / 60)
 		);
-		opts.mosaic.frames = Math.min(
+		transcoder.meta.mosaicFrames = Math.min(
 			180,
-			$FORMAT.duration / opts.mosaic.minInterval
+			$FORMAT.duration / cli.opts.timelinePreviewIntervalMin
 		).toFixed();
 
 		transcoder.addArgumentSet({
@@ -307,8 +304,10 @@ async function processVideo(transcoder, globals, paths) {
 			map: `0:${$VIDEO.index}`,
 			'c:v': 'png',
 			'filter:v': `scale=-2:${
-				opts.mosaic.tileheight
-			},select='not(mod(\\n,${Math.ceil($FRAME_COUNT / opts.mosaic.frames)}))'`,
+				cli.opts.timelinePreviewTileHeight
+			},select='not(mod(\\n,${Math.ceil(
+				$FRAME_COUNT / transcoder.meta.mosaicFrames
+			)}))'`,
 			fps_mode: 'passthrough',
 		});
 
@@ -327,7 +326,7 @@ async function processImages(transcoder, paths) {
 		.jpeg()
 		.toFile(path.join(paths.output, 'poster.jpg'));
 
-	if (!opts['skip-seek-previews']) {
+	if (cli.opts.timelinePreviews) {
 		logger('event', 'Creating preview mosaic');
 		const seekDir = path.join(paths.output, 'seek');
 		await fs.promises.mkdir(seekDir, { recursive: true });
@@ -342,8 +341,11 @@ async function processImages(transcoder, paths) {
 		const seekImageMeta = await sharp(seekImages[0]).metadata();
 
 		// Compute some stats
-		const rows = Math.ceil(seekImages.length / opts.mosaic.imagesPerRow);
-		const totalWidth = seekImageMeta.width * opts.mosaic.imagesPerRow;
+		const rows = Math.ceil(
+			seekImages.length / cli.opts.timelinePreviewSpriteColumns
+		);
+		const totalWidth =
+			seekImageMeta.width * cli.opts.timelinePreviewSpriteColumns;
 		const totalHeight = seekImageMeta.height * rows;
 
 		// Compose a new mosaic image by remapping the file array into a new sharp image.
@@ -360,16 +362,18 @@ async function processImages(transcoder, paths) {
 		})
 			.composite(
 				seekImages.map((image, index) => {
-					const currentTime = index * opts.mosaic.interval;
+					const currentTime = index * transcoder.meta.mosaicInterval;
 					const x =
-						Math.floor(index % opts.mosaic.imagesPerRow) * seekImageMeta.width;
+						Math.floor(index % cli.opts.timelinePreviewSpriteColumns) *
+						seekImageMeta.width;
 					const y =
-						Math.floor(index / opts.mosaic.imagesPerRow) * seekImageMeta.height;
+						Math.floor(index / cli.opts.timelinePreviewSpriteColumns) *
+						seekImageMeta.height;
 					vttEntries.push(
 						`${convertTime.toTimestamp(
 							currentTime
 						)} --> ${convertTime.toTimestamp(
-							currentTime + opts.mosaic.interval
+							currentTime + transcoder.meta.mosaicInterval
 						)}\n${path.join(
 							'/',
 							paths.outputPrefix,
