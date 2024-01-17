@@ -81,21 +81,9 @@ async function setup(source) {
 		streams: { video: $VIDEO, audio: $AUDIO },
 	} = transcoder.specs;
 
-	let { outputPrefix } = cli.opts;
-
-	// If preserve structure is true:
-	// 1. Remove current directory from source path
-	// 2. Resolve a new path, joining the output directory, prefix, resulting path, and slug
-	if (cli.opts.preserveDirStructure) {
-		outputPrefix = transcoder.meta.path.dir.replace(
-			path.join(process.cwd(), '/'),
-			''
-		);
-	}
-
 	const outputPath = path.resolve(
 		cli.opts.output,
-		outputPrefix,
+		transcoder.meta.prefix,
 		transcoder.meta.slug
 	);
 
@@ -162,7 +150,6 @@ async function setup(source) {
 			source: sourcePath,
 			tmp: tmpPath,
 			output: outputPath,
-			outputPrefix,
 		},
 	};
 }
@@ -369,10 +356,18 @@ async function processImages(transcoder, paths) {
 			seekImageMeta.width * cli.opts.timelinePreviewSpriteColumns;
 		const totalHeight = seekImageMeta.height * rows;
 
-		// Compose a new mosaic image by remapping the file array into a new sharp image.
-		// Create an array of times for the VTT file as array is mapped.
-		const vttEntries = ['WEBVTT'];
+		// Map array of image names to an array of objects describing the left and top point of each image
+		const imageData = seekImages.map((image, index) => ({
+			input: image,
+			left:
+				Math.floor(index % cli.opts.timelinePreviewSpriteColumns) *
+				seekImageMeta.width,
+			top:
+				Math.floor(index / cli.opts.timelinePreviewSpriteColumns) *
+				seekImageMeta.height,
+		}));
 
+		// Compose a new mosaic image by remapping the data array into a new sharp image.
 		await sharp({
 			create: {
 				background: '#AAA',
@@ -381,40 +376,31 @@ async function processImages(transcoder, paths) {
 				height: totalHeight,
 			},
 		})
-			.composite(
-				seekImages.map((image, index) => {
-					const currentTime = index * transcoder.meta.mosaicInterval;
-					const x =
-						Math.floor(index % cli.opts.timelinePreviewSpriteColumns) *
-						seekImageMeta.width;
-					const y =
-						Math.floor(index / cli.opts.timelinePreviewSpriteColumns) *
-						seekImageMeta.height;
-					vttEntries.push(
-						`${convertTime.toTimestamp(
-							currentTime
-						)} --> ${convertTime.toTimestamp(
-							currentTime + transcoder.meta.mosaicInterval
-						)}\n${path.join(
-							'/',
-							paths.outputPrefix,
-							transcoder.meta.slug,
-							'seek/storyboard.jpg'
-						)}#xywh=${x},${y},${seekImageMeta.width},${seekImageMeta.height}`
-					);
-
-					return {
-						input: image,
-						left: x,
-						top: y,
-					};
-				})
-			)
+			.composite(imageData)
 			.toFile(path.join(seekDir, 'storyboard.jpg'));
+
+		// Create an array of VTT entries by mapping the data array into a set of entries
+		const vttEntries = imageData.map((img, index) => {
+			const currentTime = index * transcoder.meta.mosaicInterval;
+			const startTimestamp = convertTime.toTimestamp(currentTime);
+			const endTimestamp = convertTime.toTimestamp(
+				currentTime + transcoder.meta.mosaicInterval
+			);
+			const tc = `${startTimestamp} --> ${endTimestamp}`;
+			const url = path.resolve(
+				'/',
+				cli.opts.timelinePreviewVttPrefix,
+				transcoder.meta.prefix,
+				transcoder.meta.slug,
+				`seek/storyboard.jpg#xywh=${img.left},${img.top},${seekImageMeta.width},${seekImageMeta.height}`
+			);
+
+			return `${tc}\n${url}`;
+		});
 
 		await fs.promises.writeFile(
 			path.join(seekDir, 'thumbnails.vtt'),
-			vttEntries.join('\n\n')
+			['WEBVTT', ...vttEntries].join('\n\n')
 		);
 	}
 }
