@@ -15,6 +15,7 @@ import cli from '../lib/cli.js';
 import findPoster from '../utils/findPoster.js';
 import logger from '../utils/logger.js';
 import convertTime from '../utils/convertTime.js';
+import getTimelinePreviewSpecs from '../utils/getTimelinePreviewSpecs.js';
 
 // External modules
 import sharp from 'sharp';
@@ -83,7 +84,8 @@ async function setup(source) {
 
 	const outputPath = path.resolve(
 		cli.opts.output,
-		transcoder.meta.prefix,
+		cli.opts.outputPrefix,
+		transcoder.meta.rel,
 		transcoder.meta.slug
 	);
 
@@ -154,6 +156,9 @@ async function setup(source) {
 	};
 }
 
+/**
+ * @param {FFmpeg} transcoder
+ */
 async function processVideo(transcoder, globals, paths) {
 	// Destructure globals
 	const { $VIDEO, $AUDIO, $FORMAT, $FPS, $FRAME_COUNT } = globals;
@@ -298,14 +303,9 @@ async function processVideo(transcoder, globals, paths) {
 
 	if (cli.opts.timelinePreviews) {
 		logger('info', 'Seek preview sprite requested');
-		transcoder.meta.mosaicInterval = Math.min(
-			cli.opts.timelinePreviewIntervalMax,
-			Math.max(cli.opts.timelinePreviewIntervalMin, $FORMAT.duration / 60)
+		transcoder.meta.mosaic = getTimelinePreviewSpecs(
+			transcoder.specs.format.duration
 		);
-		transcoder.meta.mosaicFrames = Math.min(
-			180,
-			$FORMAT.duration / cli.opts.timelinePreviewIntervalMin
-		).toFixed();
 
 		transcoder.addArgumentSet({
 			f: 'image2',
@@ -314,7 +314,7 @@ async function processVideo(transcoder, globals, paths) {
 			'filter:v': `scale=-2:${
 				cli.opts.timelinePreviewTileHeight
 			},select='not(mod(\\n,${Math.ceil(
-				$FRAME_COUNT / transcoder.meta.mosaicFrames
+				$FRAME_COUNT / transcoder.meta.mosaic.frames
 			)}))'`,
 			fps_mode: 'passthrough',
 		});
@@ -331,7 +331,9 @@ async function processImages(transcoder, paths) {
 	logger('event', 'Creating poster.jpg');
 	sharp(transcoder.meta.poster || path.join(paths.tmp, 'poster.png'))
 		.resize(null, transcoder.resolutions[0].height)
-		.jpeg()
+		.jpeg({
+			mozjpeg: true,
+		})
 		.toFile(path.join(paths.output, 'poster.jpg'));
 
 	if (cli.opts.timelinePreviews) {
@@ -377,20 +379,23 @@ async function processImages(transcoder, paths) {
 			},
 		})
 			.composite(imageData)
+			.jpeg({
+				mozjpeg: true,
+			})
 			.toFile(path.join(seekDir, 'storyboard.jpg'));
 
 		// Create an array of VTT entries by mapping the data array into a set of entries
 		const vttEntries = imageData.map((img, index) => {
-			const currentTime = index * transcoder.meta.mosaicInterval;
+			const currentTime = index * transcoder.meta.mosaic.interval;
 			const startTimestamp = convertTime.toTimestamp(currentTime);
 			const endTimestamp = convertTime.toTimestamp(
-				currentTime + transcoder.meta.mosaicInterval
+				currentTime + transcoder.meta.mosaic.interval
 			);
 			const tc = `${startTimestamp} --> ${endTimestamp}`;
 			const url = path.resolve(
 				'/',
-				cli.opts.timelinePreviewVttPrefix,
-				transcoder.meta.prefix,
+				cli.opts.outputPrefix,
+				transcoder.meta.rel,
 				transcoder.meta.slug,
 				`seek/storyboard.jpg#xywh=${img.left},${img.top},${seekImageMeta.width},${seekImageMeta.height}`
 			);
