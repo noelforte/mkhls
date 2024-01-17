@@ -22,7 +22,7 @@ import sharp from 'sharp';
 import kleur from 'kleur';
 
 try {
-	console.log(`\n${cli.pkg.name} v${cli.pkg.version}`);
+	console.log(`\n${cli.pkg.name} v${cli.pkg.version}\n\n`);
 	const totalFilesToProcess = cli.args.length;
 
 	/*

@@ -2,6 +2,11 @@
 	"name": "mkhls",
 	"main": "mkhls.js",
 	"type": "module",
+	"author": {
+		"name": "Noel Forte",
+		"email": "noel@forte.is",
+		"url": "https://forte.is/"
+	},
 	"bin": {
 		"mkhls": "./bin/mkhls.js"
 	},
