@@ -25,6 +25,9 @@ try {
 	console.log(`\n${cli.pkg.name} v${cli.pkg.version}\n\n`);
 	const totalFilesToProcess = cli.args.length;
 
+	if (cli.opts.overwrite)
+		logger('warn', "Overwrite specified, hope you know what you're doing...");
+
 	/*
 	Notable note:
 	We for await ... of here because each (really long) ffmpeg call parallel
@@ -65,7 +68,7 @@ async function setup(source) {
 	const transcoder = new FFmpeg();
 
 	// Set overwrite option
-	transcoder.addArguments(cli.opts.overwrite ? '-y' : '-n');
+	transcoder.addArguments('-y');
 
 	// Extract path to process
 	logger('info', 'Resolving paths...');
@@ -89,6 +92,13 @@ async function setup(source) {
 		transcoder.meta.rel,
 		transcoder.meta.slug
 	);
+
+	// Handle overwrite
+	if (fs.existsSync(outputPath) && !cli.opts.overwrite) {
+		throw new Error(
+			`Output path ${outputPath} already exists use --overwrite to force overwrite destination.`
+		);
+	}
 
 	const tmpPath = path.join(outputPath, '_tmp');
 
@@ -122,18 +132,8 @@ async function setup(source) {
 	}
 
 	// Find poster frames
-	if (
-		$VIDEO &&
-		(cli.opts.overwrite || !fs.existsSync(path.join(outputPath, 'poster.jpg')))
-	) {
+	if ($VIDEO) {
 		transcoder.meta.poster = findPoster(sourcePath);
-	} else {
-		throw new Error(
-			`Poster ${path.join(
-				outputPath,
-				'poster.jpg'
-			)} already exists, use --overwrite to force.`
-		);
 	}
 
 	// Create output directories
@@ -328,14 +328,21 @@ async function processVideo(transcoder, globals, paths) {
 }
 
 async function processImages(transcoder, paths) {
+	// Get output format
+	const outputFormat = cli.opts.imageFormat;
+	const imgExt = outputFormat === 'jpeg' ? 'jpg' : outputFormat;
+	const sharpOpts = {
+		mozjpeg: true,
+		smartSubsample: true,
+		quality: 65,
+	};
+
 	// If a poster wasn't provided, time to set that
-	logger('event', 'Creating poster.jpg');
+	logger('event', `Creating poster.${imgExt}`);
 	sharp(transcoder.meta.poster || path.join(paths.tmp, 'poster.png'))
 		.resize(null, transcoder.resolutions[0].height)
-		.jpeg({
-			mozjpeg: true,
-		})
-		.toFile(path.join(paths.output, 'poster.jpg'));
+		.toFormat(outputFormat, sharpOpts)
+		.toFile(path.join(paths.output, `poster.${imgExt}`));
 
 	if (cli.opts.timelinePreviews) {
 		logger('event', 'Creating preview mosaic');
@@ -380,10 +387,8 @@ async function processImages(transcoder, paths) {
 			},
 		})
 			.composite(imageData)
-			.jpeg({
-				mozjpeg: true,
-			})
-			.toFile(path.join(seekDir, 'storyboard.jpg'));
+			.toFormat(outputFormat, sharpOpts)
+			.toFile(path.join(seekDir, `storyboard.${imgExt}`));
 
 		// Create an array of VTT entries by mapping the data array into a set of entries
 		const vttEntries = imageData.map((img, index) => {
@@ -398,7 +403,7 @@ async function processImages(transcoder, paths) {
 				cli.opts.outputPrefix,
 				transcoder.meta.rel,
 				transcoder.meta.slug,
-				`seek/storyboard.jpg#xywh=${img.left},${img.top},${seekImageMeta.width},${seekImageMeta.height}`
+				`seek/storyboard.${imgExt}#xywh=${img.left},${img.top},${seekImageMeta.width},${seekImageMeta.height}`
 			);
 
 			return `${tc}\n${url}`;
