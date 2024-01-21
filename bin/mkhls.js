@@ -345,7 +345,7 @@ async function processImages(transcoder, paths) {
 		.toFile(path.join(paths.output, `poster.${imgExt}`));
 
 	if (cli.opts.timelinePreviews) {
-		logger('event', 'Creating preview mosaic');
+		logger('event', `Creating storyboard.${imgExt}`);
 		const seekDir = path.join(paths.output, 'seek');
 		await fs.promises.mkdir(seekDir, { recursive: true });
 
@@ -391,6 +391,7 @@ async function processImages(transcoder, paths) {
 			.toFile(path.join(seekDir, `storyboard.${imgExt}`));
 
 		// Create an array of VTT entries by mapping the data array into a set of entries
+		logger('event', `Creating thumbnails.vtt`);
 		const vttEntries = imageData.map((img, index) => {
 			const currentTime = index * transcoder.meta.mosaic.interval;
 			const startTimestamp = convertTime.toTimestamp(currentTime);
