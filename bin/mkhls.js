@@ -331,17 +331,17 @@ async function processImages(transcoder, paths) {
 	// Get output format
 	const outputFormat = cli.opts.imageFormat;
 	const imgExt = outputFormat === 'jpeg' ? 'jpg' : outputFormat;
-	const sharpOpts = {
-		mozjpeg: true,
-		smartSubsample: true,
-		quality: 65,
-	};
 
 	// If a poster wasn't provided, time to set that
 	logger('event', `Creating poster.${imgExt}`);
 	sharp(transcoder.meta.poster || path.join(paths.tmp, 'poster.png'))
 		.resize(null, transcoder.resolutions[0].height)
-		.toFormat(outputFormat, sharpOpts)
+		.toFormat(outputFormat, {
+			effort: 6,
+			mozjpeg: true,
+			preset: 'photo',
+			quality: outputFormat === 'jpeg' ? 65 : 80,
+		})
 		.toFile(path.join(paths.output, `poster.${imgExt}`));
 
 	if (cli.opts.timelinePreviews) {
@@ -387,7 +387,11 @@ async function processImages(transcoder, paths) {
 			},
 		})
 			.composite(imageData)
-			.toFormat(outputFormat, sharpOpts)
+			.toFormat(outputFormat, {
+				mozjpeg: true,
+				quality: outputFormat === 'jpeg' ? 40 : 50,
+				preset: 'icon',
+			})
 			.toFile(path.join(seekDir, `storyboard.${imgExt}`));
 
 		// Create an array of VTT entries by mapping the data array into a set of entries
