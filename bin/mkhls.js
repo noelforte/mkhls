@@ -26,7 +26,7 @@ try {
 	const totalFilesToProcess = cli.args.length;
 
 	if (cli.opts.overwrite)
-		logger('warn', "Overwrite specified, hope you know what you're doing...");
+		logger('warn', "--overwrite specified, hope you know what you're doing...");
 
 	/*
 	Notable note:
