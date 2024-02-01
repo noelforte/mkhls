@@ -1,10 +1,12 @@
 /**
  * @typedef {'<HH:MM:SS.sss>'} Timestamp A string containing a timestamp in the format of `<hours>:<minutes>:<seconds>.<milliseconds>`
- * @typedef {'<Number>'} NumberString A string that can be evaluated as coerced to a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_coercion Number}.
+ * @typedef {'<Number>'} NumberString A string that can be coerced to a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_coercion Number}.
  */
 const convertTime = {
 	/**
-	 * Converts a timestamp into seconds
+	 * Converts a timestamp into seconds.
+	 * Credit to {@link https://github.com/fluent-ffmpeg/node-fluent-ffmpeg/blob/master/lib/utils.js#L237-L262 fluent-ffmpeg}
+	 * for this method.
 	 * @param {(Timestamp|NumberString|Number)} ts
 	 * @returns {Number}
 	 */
@@ -23,7 +25,8 @@ const convertTime = {
 	},
 
 	/**
-	 * Converts seconds into timestamp
+	 * Converts seconds into timestamp. Converts the seconds specified
+	 * into a timestamp in the format of HH:MM:SS.sss
 	 * @param {(Number|NumberString)} seconds
 	 * @returns {Timestamp} A formatted {@link Timestamp}
 	 */
