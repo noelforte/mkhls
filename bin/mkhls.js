@@ -86,6 +86,8 @@ async function setup(source) {
 		streams: { video: $VIDEO, audio: $AUDIO },
 	} = transcoder.specs;
 
+	cli.opts.output ||= path.dirname(sourcePath);
+
 	const outputPath = path.resolve(
 		cli.opts.output,
 		cli.opts.outputPrefix,
