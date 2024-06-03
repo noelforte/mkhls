@@ -1,0 +1,3 @@
+{
+	"extends": ["github>noelforte/renovate-config", "group:allNonMajor"]
+}
