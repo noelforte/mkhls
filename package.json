@@ -11,7 +11,7 @@
 		"mkhls": "./bin/mkhls.js"
 	},
 	"packageManager": "pnpm@9.1.4",
-	"version": "2.6.0",
+	"version": "2.6.1",
 	"dependencies": {
 		"commander": "12.1.0",
 		"kleur": "4.1.5",
