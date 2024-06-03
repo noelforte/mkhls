@@ -190,13 +190,13 @@ async function processVideo(transcoder, globals, paths) {
 			transcoder.addArgumentSet({
 				f: 'mp4',
 				map: `0:${$VIDEO.index}`,
-				vf: ["scale=-2:'min(720,ih)'", `format=${cli.opts.videoPixelFormat}`],
+				vf: ["scale=-2:'min(540,ih)'", `format=${cli.opts.videoPixelFormat}`],
 				'codec:v': 'libx264',
 				'profile:v': 'main',
 				'level:v': 3.1,
-				'b:v': '2000k',
-				'maxrate:v': '2000k',
-				'bufsize:v': '3000k',
+				'b:v': '1500k',
+				'maxrate:v': '1500k',
+				'bufsize:v': '2500k',
 			});
 			if ($AUDIO) {
 				transcoder.addArgumentSet({
