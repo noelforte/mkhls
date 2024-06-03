@@ -7,8 +7,8 @@ const convertTime = {
 	 * Converts a timestamp into seconds.
 	 * Credit to {@link https://github.com/fluent-ffmpeg/node-fluent-ffmpeg/blob/master/lib/utils.js#L237-L262 fluent-ffmpeg}
 	 * for this method.
-	 * @param {(Timestamp|NumberString|Number)} ts
-	 * @returns {Number}
+	 * @param {(Timestamp|NumberString|number)} ts
+	 * @returns {number}
 	 */
 	toSeconds(ts) {
 		if (typeof ts === 'number' || ts.match(/^[\d.]+$/)) {
@@ -27,7 +27,7 @@ const convertTime = {
 	/**
 	 * Converts seconds into timestamp. Converts the seconds specified
 	 * into a timestamp in the format of HH:MM:SS.sss
-	 * @param {(Number|NumberString)} seconds
+	 * @param {(number|NumberString)} seconds
 	 * @returns {Timestamp} A formatted {@link Timestamp}
 	 */
 	toTimestamp(seconds) {

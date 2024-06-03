@@ -3,7 +3,7 @@ import cli from '../lib/cli.js';
 import getTimestamp from './getTimestamp.js';
 
 /**
- * Simple logging utility that wraps `console.log` calls with {@link https://www.npmjs.com/package/kleur kleur}
+ * @file Simple logging utility that wraps `console.log` calls with {@link https://www.npmjs.com/package/kleur kleur}
  *
  * @param {LogFormat} meta
  *

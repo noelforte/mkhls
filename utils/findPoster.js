@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Tiny utility to find poster frames within a specified source path
+ * Utility to find poster frames within a specified source path
  *
  * @param {fs.PathLike} inputPath A parseable pathname
  * @returns {(string|undefined)} Path to a poster frame, undefined if no path was found.
