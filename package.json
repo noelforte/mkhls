@@ -10,7 +10,7 @@
 	"bin": {
 		"mkhls": "./bin/mkhls.js"
 	},
-	"packageManager": "pnpm@9.3.0",
+	"packageManager": "pnpm@9.4.0",
 	"version": "2.6.1",
 	"dependencies": {
 		"commander": "12.1.0",
@@ -18,8 +18,8 @@
 		"sharp": "0.33.4"
 	},
 	"devDependencies": {
-		"@types/node": "20.14.2",
-		"eslint": "9.4.0",
+		"@types/node": "20.14.4",
+		"eslint": "9.5.0",
 		"eslint-config-prettier": "9.1.0",
 		"eslint-config-xo": "0.45.0"
 	},
